@@ -1,0 +1,9 @@
+{
+  "include": ["src", "tests"],
+  "exclude": ["**/node_modules", "**/__pycache__", ".venv"],
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Darwin",
+  "typeCheckingMode": "basic",
+  "stubPath": "typings",
+  "extraPaths": [".venv/lib/python3.13/site-packages"]
+}
