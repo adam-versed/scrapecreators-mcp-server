@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcp-server"
+name = "scrapecreators-mcp-server"
 version = "0.1.0"
-description = "A FastMCP server for exploring scraper content"
+description = "A FastMCP server for the ScraperCreators platform"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Proprietary"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"},
+    {name = "ScraperCreators Team", email = "dev@example.com"},
 ]
 
 dependencies = [
@@ -48,4 +48,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "N", "UP", "ANN"]
-ignore = ["B008"] 
+ignore = ["B008"]
+
+[tool.pytest]
+pythonpath = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scrapecreator_api"] 

@@ -230,9 +230,9 @@ class RedditSearch:
             # Re-raise any other exceptions
             raise RedditSearchError(f"An unexpected error occurred: {str(e)}")
     
-    def search(self, 
-               query: str = "", 
-               sort: str = "relevance", 
+    def search(self,
+               query: str = "",
+               sort: str = "relevance",
                timeframe: str = "all",
                return_mode: Literal["inline", "file"] = "inline",
                max_results: Optional[int] = None,
@@ -249,7 +249,7 @@ class RedditSearch:
             max_results: Maximum number of results to return.
             output_dir: Override the default output directory for this search.
             **modifiers: Supported search modifiers (e.g., author, subreddit, title, selftext).
-        
+            
         Returns:
             SearchResponse object containing either:
             - posts and count (for inline mode)
@@ -276,50 +276,54 @@ class RedditSearch:
             total_fetched = 0
             
             while True:
+                # Make API request
                 response_data = self._raw_search(
                     query=query,
                     sort=sort,
                     timeframe=timeframe,
                     after=after,
-                    **modifiers
+                    **{k: v for k, v in modifiers.items() if k != 'after'}
                 )
                 
-                # Parse response with Pydantic model
-                parsed_response = RedditSearchRawResponse(**response_data)
-                posts = parsed_response.posts
+                # Extract posts from response
+                posts = response_data.get("data", {}).get("children", [])
+                if posts:
+                    # Each post is wrapped in a "data" object
+                    posts = [post.get("data", {}) for post in posts]
+                    all_results.extend(posts)
+                    total_fetched = len(all_results)
                 
-                # Add posts to results
-                all_results.extend(posts)
-                total_fetched += len(posts)
-                
-                # Check if we've reached max_results
+                # Check if we've reached the max_results limit
                 if max_results and total_fetched >= max_results:
                     all_results = all_results[:max_results]
                     break
                 
-                # Get next page token from the raw response data
-                data = response_data.get("data", {})
-                after = data.get("after")
-                if not after or not posts:
+                # Get next page token
+                after = response_data.get("data", {}).get("after")
+                if not after:
                     break
             
-            # Prepare response based on return mode
-            if return_mode == "file":
-                # Save results to file
+            # Convert results to RedditPost objects
+            reddit_posts = [RedditPost.from_api_response(post) for post in all_results]
+            
+            # Return results based on return_mode
+            if return_mode == "inline":
+                return SearchResponse(
+                    success=True,
+                    count=len(reddit_posts),
+                    posts=reddit_posts,
+                    file_path=None
+                )
+            else:  # file mode
                 file_path = self._save_results_to_file(
-                    [post.raw_data for post in all_results],
+                    [post.raw_data for post in reddit_posts],
                     query
                 )
                 return SearchResponse(
-                    count=len(all_results),
-                    file_path=file_path,
-                    posts=None
-                )
-            else:  # inline mode
-                return SearchResponse(
-                    count=len(all_results),
-                    posts=all_results,
-                    file_path=None
+                    success=True,
+                    count=len(reddit_posts),
+                    posts=None,
+                    file_path=file_path
                 )
                 
         finally:
@@ -327,58 +331,33 @@ class RedditSearch:
             if output_dir:
                 self.output_dir = original_output_dir
     
-    def search_with_pagination(self, 
-                              query: str = "", 
-                              sort: str = "relevance", 
-                              timeframe: str = "all", 
-                              limit: Optional[int] = None, 
-                              **modifiers) -> List[Dict[str, Any]]:
+    def search_with_pagination(self,
+                             query: str = "",
+                             sort: str = "relevance",
+                             timeframe: str = "all",
+                             limit: Optional[int] = None,
+                             **modifiers) -> SearchResponse:
         """
         Perform a search with automatic pagination.
+        
+        This is a convenience method that uses search() internally.
         
         Args:
             query: The search keywords or phrases.
             sort: Sort method for results.
             timeframe: Time period for results.
-            limit: Maximum number of results to return. If None, returns all available results.
+            limit: Maximum number of results to return.
             **modifiers: Search modifiers.
             
         Returns:
-            A list of Reddit post results.
+            SearchResponse object with all results.
         """
-        all_results = []
-        after = None
-        total_fetched = 0
-        
-        while True:
-            # Perform the search
-            response = self.search(
-                query=query, 
-                sort=sort, 
-                timeframe=timeframe, 
-                after=after, 
-                **modifiers
-            )
-            
-            # Extract the posts from the response
-            # Adjust this based on the actual API response structure
-            data = response.get("data", {})
-            posts = data.get("children", [])
-            
-            # Add the posts to our results
-            all_results.extend(posts)
-            total_fetched += len(posts)
-            
-            # Check if we've reached the limit
-            if limit and total_fetched >= limit:
-                all_results = all_results[:limit]  # Trim to the exact limit
-                break
-            
-            # Get the 'after' token for the next page
-            after = data.get("after")
-            
-            # If there's no after token or no posts were returned, we've reached the end
-            if not after or not posts:
-                break
-        
-        return all_results 
+        response = self.search(
+            query=query,
+            sort=sort,
+            timeframe=timeframe,
+            return_mode="inline",
+            max_results=limit,
+            **modifiers
+        )
+        return response 
