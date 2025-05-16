@@ -3,6 +3,7 @@ Tests for the RedditSearch class.
 """
 
 import os
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 from src.scrapecreator_api.reddit_search import (
@@ -12,7 +13,31 @@ from src.scrapecreator_api.reddit_search import (
     RedditSearchAuthenticationError,
     RedditSearchConnectionError
 )
+from datetime import datetime
+from pathlib import Path
 
+# Sample API response for testing
+SAMPLE_RESPONSE = {
+    "success": True,
+    "posts": [
+        {
+            "id": "abc123",
+            "subreddit": "test",
+            "title": "Test Post",
+            "selftext": "Test Content",
+            "author": "testuser",
+            "score": 42,
+            "upvote_ratio": 0.95,
+            "num_comments": 10,
+            "created_utc": 1234567890,
+            "url": "https://reddit.com/r/test/comments/abc123",
+            "permalink": "/r/test/comments/abc123",
+            "is_self": True,
+            "is_video": False,
+            "created_at_iso": "2024-03-20T12:34:56.000Z"
+        }
+    ]
+}
 
 class TestRedditSearch:
     """Tests for the RedditSearch class."""
@@ -178,4 +203,111 @@ class TestRedditSearch:
             results = client.search_with_pagination(query="test", limit=3)
             assert len(results) == 3
             assert results[0]["id"] == "1"
-            assert results[2]["id"] == "3" 
+            assert results[2]["id"] == "3"
+
+@pytest.fixture
+def reddit_search():
+    """Create a RedditSearch instance with a mock API key."""
+    with patch.dict(os.environ, {"REDDIT_API_KEY": "test_key"}):
+        return RedditSearch()
+
+@pytest.fixture
+def mock_response():
+    """Create a mock response object."""
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.json.return_value = SAMPLE_RESPONSE
+    return mock
+
+def test_search_inline_mode(reddit_search, mock_response):
+    """Test search with inline response mode."""
+    with patch("httpx.Client.get", return_value=mock_response):
+        response = reddit_search.search(
+            query="test",
+            return_mode="inline",
+            max_results=1
+        )
+        
+        assert response.success is True
+        assert response.count == 1
+        assert response.file_path is None
+        assert len(response.posts) == 1
+        assert response.posts[0].id == "abc123"
+
+def test_search_file_mode(reddit_search, mock_response, tmp_path):
+    """Test search with file response mode."""
+    with patch("httpx.Client.get", return_value=mock_response):
+        response = reddit_search.search(
+            query="test",
+            return_mode="file",
+            output_dir=str(tmp_path)
+        )
+        
+        assert response.success is True
+        assert response.count == 1
+        assert response.posts is None
+        assert response.file_path is not None
+        assert os.path.exists(response.file_path)
+        
+        # Verify file contents
+        with open(response.file_path, 'r') as f:
+            saved_data = json.load(f)
+            assert len(saved_data) == 1
+            assert saved_data[0]["id"] == "abc123"
+
+def test_search_with_max_results(reddit_search, mock_response):
+    """Test search with max_results limit."""
+    # Create response with multiple posts
+    multi_response = {
+        "success": True,
+        "posts": SAMPLE_RESPONSE["posts"] * 3  # 3 copies of the sample post
+    }
+    mock_response.json.return_value = multi_response
+    
+    with patch("httpx.Client.get", return_value=mock_response):
+        response = reddit_search.search(
+            query="test",
+            return_mode="inline",
+            max_results=2
+        )
+        
+        assert response.success is True
+        assert response.count == 2
+        assert len(response.posts) == 2
+
+def test_search_invalid_return_mode(reddit_search):
+    """Test search with invalid return mode."""
+    with pytest.raises(ValueError) as exc_info:
+        reddit_search.search(query="test", return_mode="invalid")
+    assert "Invalid return mode" in str(exc_info.value)
+
+def test_search_custom_output_dir(reddit_search, mock_response, tmp_path):
+    """Test search with custom output directory."""
+    custom_dir = tmp_path / "custom_output"
+    
+    with patch("httpx.Client.get", return_value=mock_response):
+        response = reddit_search.search(
+            query="test",
+            return_mode="file",
+            output_dir=str(custom_dir)
+        )
+        
+        assert response.success is True
+        assert str(custom_dir) in response.file_path
+        assert os.path.exists(response.file_path)
+
+def test_search_file_name_format(reddit_search, mock_response, tmp_path):
+    """Test the format of generated result files."""
+    with patch("httpx.Client.get", return_value=mock_response):
+        response = reddit_search.search(
+            query="test query with spaces!",
+            return_mode="file",
+            output_dir=str(tmp_path)
+        )
+        
+        # Verify filename format
+        filename = os.path.basename(response.file_path)
+        assert filename.startswith("reddit_search_test_query_with_spaces")
+        assert filename.endswith(".json")
+        assert "_202" in filename  # Should contain year
+        assert len(filename.split("_")) >= 4  # Should have multiple parts 
