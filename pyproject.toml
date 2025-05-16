@@ -40,7 +40,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
-mypy_path = "typings"
+mypy_path = ["typings", "src"]
 
 [tool.ruff]
 line-length = 100
@@ -52,6 +52,11 @@ ignore = ["B008"]
 
 [tool.pytest]
 pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-v"
 
 [tool.hatch.build.targets.wheel]
+packages = ["src/scrapecreator_api"]
+
+[tool.hatch.build]
 packages = ["src/scrapecreator_api"] 

@@ -1,1 +1,3 @@
-"""Test package for scrapercontent-explorer."""
+"""
+Test package for scrapecreator_api.
+"""

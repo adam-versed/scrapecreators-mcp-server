@@ -1,12 +1,12 @@
-"""Main entry point for the MCP Server."""
+"""Main entry point for the ScraperCreators MCP Server."""
 
 from fastmcp import FastMCP
 
 
 # Name the FastMCP instance 'mcp' to make it discoverable by the CLI
 mcp = FastMCP(
-    title="MCP Server",
-    description="A FastMCP server for exploring scraper content",
+    title="ScraperCreators MCP Server",
+    description="A FastMCP server for the ScraperCreators platform",
 )
 
 
@@ -20,7 +20,7 @@ def hello(name: str) -> str:
     Returns:
         A greeting message
     """
-    return f"Hello, {name}! Welcome to the MCP Server."
+    return f"Hello, {name}! Welcome to the ScraperCreators MCP Server."
 
 
 def main() -> None:
